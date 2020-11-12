@@ -51,7 +51,7 @@
     "defaultValue": "",
     "templateOptions": {
       "label": "School Year Id",
-      "required": true
+      "required": false
     }
   },
   {
@@ -60,7 +60,7 @@
     "defaultValue": "",
     "templateOptions": {
       "label": "Fiscal Year Id",
-      "required": true
+      "required": false
     }
   }
 ]
