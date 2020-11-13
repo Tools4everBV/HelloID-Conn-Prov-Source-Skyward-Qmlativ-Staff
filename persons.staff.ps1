@@ -133,6 +133,11 @@
           -ObjectName "StaffType" `
           -SearchFields ( ("Code,CodeDescription,Description,StaffTypeID") -split ",")
 
+  $Demographics = get_data_objects `
+        -ModuleName "Demographics" `
+        -ObjectName "Name" `
+        -SearchFields ( ("NameID,Age,BirthDate,Gender,GenderCode,FirstName,LastName,MiddleName") -split ",")
+
 foreach($stf in $staff)
 {
     $person = @{};
