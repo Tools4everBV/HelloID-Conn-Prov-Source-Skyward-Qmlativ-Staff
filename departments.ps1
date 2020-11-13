@@ -1,12 +1,5 @@
-## Settings ##
-[string]$global:config_BaseURI = "https://skyward.iscorp.com/<CUSTOMER NAME>";
-[string]$global:config_ClientKey = "KEY";
-[string]$global:config_ClientSecret = "SECRET";
-[string]$global:config_PageSize = "500";
-[string]$global:config_EntityId = "2";
-[string]$global:config_SchoolYearId = "2";
-[string]$global:config_FiscalYearId = "";
- 
+$config = ConvertFrom-Json $configuration;
+
 [System.Net.ServicePointManager]::SecurityProtocol = [System.Net.SecurityProtocolType]::Tls12; 
 function get_oauth_access_token {
 [cmdletbinding()]
@@ -21,16 +14,12 @@ Param (
         $bytes = [System.Text.Encoding]::ASCII.GetBytes($pair);
         $bear_token = [System.Convert]::ToBase64String($bytes);
         $auth_headers = @{ Authorization = "Basic " + $bear_token };
- 
-        $uri =  "$BaseURI/oauth/token?grant_type=client_credentials";
+        
+        $uri =  "$($BaseURI)/oauth/token?grant_type=client_credentials";
         $result = Invoke-RestMethod -Method GET -Headers $auth_headers -Uri $uri -UseBasicParsing;
         @($result);
     }
 }
- 
- 
- 
- 
 function get_data_objects {
 [cmdletbinding()]
 Param (
@@ -45,35 +34,32 @@ Param (
         Write-Host (Get-Date) "Retrieving Access Token";
          
         $AccessToken = (get_oauth_access_token `
-            -BaseURI $config_BaseURI `
-            -ClientKey $config_ClientKey `
-            -ClientSecret $config_ClientSecret).access_token
+            -BaseURI $config.BaseURI `
+            -ClientKey $config.ClientKey `
+            -ClientSecret $config.ClientSecret).access_token
          
-        $headers = @{ Authorization = "Bearer " + $AccessToken };
- 
+        $headers = @{ Authorization = "Bearer $($AccessToken)" };
  
         #####GET DATA########
-        Write-Host (Get-Date) "Getting Data Objects for ( $ModuleName : $ObjectName )";
-        Write-Host (Get-Date) "Search Fields: $SearchFields";
-        $result = @();
-        $object_uri = "$config_BaseURI/Generic/$config_EntityId/$ModuleName/$ObjectName";
-        $page_uri = "$object_uri/1/$config_PageSize";
-                     
-        $query_params = @();
-        $uri_params = "";
+        Write-Verbose -Verbose "Getting Data Objects for ( $($ModuleName) : $($ObjectName) )";
+        Write-Verbose -Verbose "Search Fields: $($SearchFields)";
+        $result = [System.Collections.ArrayList]@();
+        $object_uri = "$($config.BaseURI)/Generic/$($config.EntityId)/$($ModuleName)/$($ObjectName)";
+        $page_uri = "$($object_uri)/1/$($config.PageSize)";
+        $request_params = @{};
  
         #--SCHOOL YEAR--#
-        if($config_SchoolYearId.Length -gt 0)
+        if($config.SchoolYearId.Length -gt 0)
         {
-            $query_params = $query_params + "SchoolYearID=$config_SchoolYearId";
-            Write-Host (Get-Date) "Enforcing SchoolYearID $config_SchoolYearId";
+            $request_params['SchoolYearID'] = "$($config.SchoolYearId)";
+            Write-Verbose -Verbose "Enforcing SchoolYearID $($config.SchoolYearId)";
         }
  
         #--FISCAL YEAR--#
-        if($config_FiscalYearId.Length -gt 0)
+        if($config.FiscalYearId.Length -gt 0)
         {
-            $query_params = $query_params + "FiscalYearID=$config_FiscalYearId";
-            Write-Host (Get-Date) "Enforcing FiscalYearID $config_FiscalYearId";
+            $request_params['FiscalYearID'] = "$($config.FiscalYearId)";
+            Write-Verbose -Verbose "Enforcing FiscalYearID $($config.FiscalYearId)";
         }
  
         #--SEARCH FIELDS--#                
@@ -82,65 +68,45 @@ Param (
             $i = 0
             foreach ($field in $SearchFields)
             {
-                $query_params = $query_params + "searchFields[$i]=$field";
+                $request_params["searchFields[$($i)]"] = "$($field)";
                 $i++;
             }
-                     
         }
          
-        if($query_params.count -gt 0)
-        {
-            $i = 0;
-            foreach ($param in $query_params)
-            {
-                if($i -eq 0)
-                {
-                    $uri_params = $uri_params + "?$param";
-                }
-                else
-                {
-                    $uri_params = $uri_params + "&$param";
-                }
-                $i++;
-            }
-        }
-             
-        $page_uri = $page_uri + $uri_params;
-        #Write-Host (Get-Date) " - $page_uri";
         $page_result = $null;
-        $page_result = Invoke-RestMethod -Method GET -Uri $page_uri -Headers $headers -Timeout 3600 -UseBasicParsing;
+        $page_result = Invoke-RestMethod -Method GET -Uri $page_uri -body $request_params -Headers $headers -UseBasicParsing;
          
         $previous_page_uri = $page_uri;
-        $next_page_uri = "$config_BaseURI" + $page_result.Paging.Next
- 
+        $next_page_uri = "$($config.BaseURI)$($page_result.Paging.Next)";
+
         if($page_result.Objects.Count -eq 0)
         {
-            Write-Host (Get-Date) " 1 Record returned"
-            $result += $page_result;
+            Write-Verbose -Verbose "1 Record returned"
+            $result.Add($page_result);
         }
         else
         {
-            Write-Host (Get-Date) ($page_result.Objects.Count) " Records returned"
-            $result += $page_result.Objects;
+            Write-Verbose -Verbose "$($page_result.Objects.Count) Record(s) returned"
+            $result.AddRange($page_result.Objects);
  
-            while($next_page_uri -ne $config_BaseURI -and $next_page_uri -ne $previous_page_uri)
+            while($next_page_uri -ne $config.BaseURI -and $next_page_uri -ne $previous_page_uri)
             {
-                $next_page_uri = $next_page_uri + $uri_params;
-                #Write-Host (Get-Date) " - $next_page_uri";
+                $next_page_uri = "$($next_page_uri)";
+                Write-Verbose -Verbose "$next_page_uri";
                 $page_result = $null;
-                $page_result = Invoke-RestMethod -Method GET -Uri $next_page_uri -Headers $headers -Timeout 3600 -UseBasicParsing
+                $page_result = Invoke-RestMethod -Method GET -Uri $next_page_uri -Body $request_params -Headers $headers -UseBasicParsing
              
                 $previous_page_uri = $next_page_uri;
-                $next_page_uri = "$config_BaseURI" + $page_result.Paging.Next
+                $next_page_uri = "$($config.BaseURI)$($page_result.Paging.Next)";
              
-                Write-Host (Get-Date) ($page_result.Objects.Count) " Records returned"
-                $result += $page_result.Objects;
+                Write-Verbose -Verbose  "$($page_result.Objects.Count) Record(s) returned"
+                $result.AddRange($page_result.Objects);
             }
         }
          
         Remove-Variable -Name "SearchFields" -ErrorAction SilentlyContinue
          
-        Write-Host (Get-Date) ($result.Count) " Total Records returned"                
+        Write-Verbose -Verbose "Total of $($result.Count) Record(s) returned"                
         @($result);
     }
 }
