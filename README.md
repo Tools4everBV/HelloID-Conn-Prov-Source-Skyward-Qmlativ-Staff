@@ -1,4 +1,4 @@
-# HelloID-Conn-Prov-Source-Skyward-Qmlativ-Employees
+# HelloID-Conn-Prov-Source-Skyward-Qmlativ-Staff
 HelloID Provisioning Source Connector for Skyward Qmlativ Generic API
 
 ## Setting up the API Access
